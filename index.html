@@ -1,0 +1,964 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <!-- Manifest bağlantısı -->
+    <link rel="manifest" href="manifest.json">
+
+
+
+
+    <!-- iOS (iPhone) için uygulama ikonu ve ayarları -->
+   
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="MATyer">
+    <link class="apple-touch-icon" href="icon.png">
+
+    <!-- Tema Rengi (Android üst bar rengi) -->
+    <meta name="theme-color" content="#3182ce">
+    <title>Sınav Yeri Sorgulama | Exam Location Inquiry</title>
+
+
+<script>
+      if ('serviceWorker' in navigator) {
+        window.addEventListener('load', () => {
+          navigator.serviceWorker.register('sw.js')
+            .then(reg => console.log('PWA Altyapısı Aktif (SW Registered)'))
+            .catch(err => console.error('SW Kayıt Hatası:', err));
+        });
+      }
+    </script>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.2/papaparse.min.js"></script>
+   <style>
+
+*, *::before, *::after {
+    box-sizing: border-box;
+}
+
+        body { 
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
+            display: flex; 
+            justify-content: center; 
+            align-items: flex-start;
+            padding-top: 30px;
+            background: #f4f7f6; 
+            margin: 0;
+            /* 👇 MOBİLDEKİ SAĞA SOLA ESNEK PARMAK HAREKETİNİ KİLİTLEYEN KURTARICI SATIRLAR 👇 */
+            width: 100%;
+            max-width: 100vw;
+            overflow-x: hidden;
+            position: relative;
+        }
+
+        .container {
+            background: #ffffff;
+            /* 👇 Yan padding değerlerini 40px'den 20px'e düşürerek metin alanını genişlettik 👇 */
+            padding: 20px 20px 40px 20px;
+            border-radius: 16px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.08);
+            max-width: 450px;
+            width: 90%;
+            text-align: center;
+            display: none; /* JS onayı verince block yapılacak */
+            animation: slideUp 0.4s ease-out;
+        }
+
+        /* PWA Onay Popup Tasarımı */
+        .overlay {
+            position: fixed;
+            top: 0; left: 0;
+            width: 100%; height: 100%;
+            background-color: rgba(0, 0, 0, 0.6);
+            backdrop-filter: blur(4px);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 99999;
+            animation: fadeIn 0.3s ease-out;
+        }
+
+        .popup-box {
+    background: #ffffff;
+    padding: 25px; /* 30px'den 25px'e çekerek iç boşluğu mobilde rahatlattık */
+    width: 90%; /* Genişliği esnettik */
+    max-width: 420px;
+    box-shadow: 0 20px 40px rgba(0,0,0,0.2);
+    text-align: left;
+    animation: slideUp 0.4s ease-out;
+    box-sizing: border-box; /* Taşmayı kesin engeller */
+}
+
+        .popup-box h2 {
+            margin-top: 0;
+            color: #1a365d;
+            font-size: 1.3rem;
+            font-weight: 700;
+            text-align: center;
+            letter-spacing: 0.5px;
+        }
+
+        /* Kaydırılabilir Metin Kutusu */
+        .popup-content {
+            font-size: 14px;
+            color: #4a5568;
+            line-height: 1.6;
+            margin: 20px 0;
+            max-height: 200px; 
+            overflow-y: auto;
+            padding-right: 8px;
+            border: 1px solid #edf2f7;
+            padding: 15px;
+            border-radius: 8px;
+            background: #fcfdfd;
+        }
+
+        .popup-content::-webkit-scrollbar {
+            width: 6px;
+        }
+        .popup-content::-webkit-scrollbar-thumb {
+            background: #cbd5e0;
+            border-radius: 4px;
+        }
+
+        .popup-content p { margin: 0 0 10px 0; }
+        .popup-content ul { padding-left: 20px; margin: 10px 0; }
+        .popup-content li { margin-bottom: 8px; }
+
+        /* Onay Kutusu (Checkbox) Alanı */
+        .checkbox-container {
+    display: flex;
+    align-items: center;
+    margin: 15px 0; /* Yanlardaki 4px'lik boşluğu 0 yaptık ki dışarı taşmasın */
+    font-size: 13px;
+    color: #2d3748;
+    font-weight: 600;
+    cursor: pointer;
+    opacity: 0.5; 
+    pointer-events: none; 
+    transition: all 0.3s ease;
+    width: 100%; /* Genişliği sabitledik */
+}
+
+        .checkbox-container.active {
+            opacity: 1;
+            pointer-events: auto; 
+        }
+
+        .checkbox-container input {
+            width: 18px;
+            height: 18px;
+            margin-right: 10px;
+            margin-bottom: 0; 
+            cursor: pointer;
+            min-height: auto;
+        }
+
+        .popup-footer-btn {
+            width: 100%;
+            padding: 14px;
+            background: linear-gradient(135deg, #2c5282 0%, #1a365d 100%);
+            color: white;
+            border: none;
+            border-radius: 10px;
+            font-size: 13px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 1.5px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .popup-footer-btn:disabled {
+            background: #cbd5e0 !important;
+            color: #718096;
+            cursor: not-allowed;
+            box-shadow: none;
+        }
+
+        .logo-kapsayici {
+            margin-bottom: 25px;
+            display: inline-block;
+            text-align: center;
+        }
+
+        .logo-png {
+            width: 60%;
+            max-width: 100%;
+            height: auto;
+            display: block;
+            margin: 0 auto;
+        }
+
+        label {
+            display: block;
+            text-align: left;
+            font-size: 10.5px;
+            font-weight: 800;
+            color: #2d3748;
+            margin-bottom: 10px;
+            margin-left: 2px;
+            text-transform: uppercase;
+            letter-spacing: 1.2px;
+        }
+
+        .en-label {
+            display: block;
+            font-size: 9.5px;
+            color: #a0aec0;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.8px;
+            margin-top: 2px;
+        }
+
+        select, input {
+            width: 100%;
+            padding: 10px 18px;
+            margin-bottom: 20px;
+            border: 2px solid #edf2f7;
+            border-radius: 12px;
+            font-size: 14px;
+            font-weight: 500;
+            color: #1a202c;
+            background-color: #f8fafc;
+            transition: all 0.2s ease-in-out;
+            outline: none;
+            box-sizing: border-box;
+            font-family: 'Segoe UI', system-ui, sans-serif;
+            height: auto; 
+            min-height: 40px;
+        }
+
+        select:focus, input:focus {
+            border-color: #3182ce;
+            background-color: #fff;
+            box-shadow: 0 0 0 3px rgba(66, 153, 225, 0.15);
+        }
+
+        /* --- SİLİNEN VEYA GİZLENEN GRUPLAR İÇİN ORTAK GEÇİŞ EFEKTİ --- */
+        .input-group-no, #examLanguageGroup {
+            max-height: 200px;
+            opacity: 1;
+            transition: all 0.4s ease-in-out;
+            overflow: hidden;
+            margin-bottom: 0px; /* Alttaki çakışmayı önlemek için sıfırlandı */
+        }
+
+
+/* Dil alanı açıldığında select elemanının alt boşluğunu 
+   biraz kısarak genel dengeyi yakalıyoruz */
+#examLanguageGroup select {
+    margin-bottom: 8px; 
+}
+
+
+        /* JS classList.add("gizli") dediğinde devreye girecek kurtarıcı CSS kuralları */
+        .input-group-no.gizli, #examLanguageGroup.gizli {
+            max-height: 0px !important;
+            opacity: 0 !important;
+            margin-bottom: 0px !important;            
+            transform: translateY(-10px);
+            pointer-events: none;
+        }
+
+        .main-search-btn {
+            width: 100%;
+            padding: 16px;
+            background: linear-gradient(135deg, #2c5282 0%, #1a365d 100%);
+            color: white;
+            border: none;
+            border-radius: 12px;
+            font-size: 14px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 12px rgba(26, 54, 93, 0.2);
+            margin-top: 10px; /* Alanlar kapandığında butonun yukarı yapışmaması için */
+        }
+
+        .main-search-btn:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 6px 15px rgba(26, 54, 93, 0.3);
+        }
+
+        #result {
+            margin-top: 25px;
+            padding: 0; 
+            border-radius: 20px;
+            display: none;
+            text-align: left;
+            transition: all 0.3s ease;
+            animation: slideUp 0.4s ease-out;
+            overflow: hidden;
+            box-shadow: 0 15px 35px rgba(0,0,0,0.1);
+        }
+
+        .basarili { background: #ffffff; }
+
+        .hata {
+            background: #fff5f5;
+            border: 1px solid #feb2b2;
+            color: #c53030;
+            text-align: center;
+            font-size: 14px;
+            padding: 20px;
+        }
+
+        @keyframes slideUp {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+
+        @keyframes pulseAnimation {
+            0% {
+                transform: scale(1);
+                box-shadow: 0 4px 15px rgba(221, 107, 32, 0.4);
+            }
+            50% {
+                transform: scale(1.02);
+                box-shadow: 0 4px 25px rgba(221, 107, 32, 0.7);
+            }
+            100% {
+                transform: scale(1);
+                box-shadow: 0 4px 15px rgba(221, 107, 32, 0.4);
+            }
+        }
+</style>
+</head>
+<body>
+
+<!-- Onay ve Bilgilendirme Popup Ekranı -->
+<div id="terms-overlay" class="overlay">
+    <div class="popup-box">
+        <h2>BİLGİLENDİRME VE ONAY d<br><span style="font-size: 11px; color:#a0aec0; font-weight:500;">INFORMATION AND CONSENT</span></h2>
+        <hr style="border: 0; border-top: 1px solid #edf2f7; margin: 15px 0;">
+        
+        <!-- İçeriği değiştirdiğiniz alan (Scroll bu kutuda dönecek) --> 
+        <div id="scroll-box" class="popup-content">
+           
+<p style="color: #1a202c;"><strong>Değerli Öğrencimiz / Dear Student,</strong></p>
+<p style="color: #1a202c;">
+    <strong style="color: royalblue;">MATyer</strong> Sınav Yeri Sorgulama uygulamasını kullanmadan önce lütfen aşağıdaki bilgilendirmeyi okuyup onaylayınız:<br>
+    <span style="font-size: 13.5px; color: #718096; font-style: italic; display: block; margin-top: 4px;">
+        Please read and accept the following information before using the <strong style="color: royalblue;">MATyer</strong> Exam Location Inquiry application:
+    </span>
+</p>            
+  <ul style="color: #1a202c; padding-left: 20px; margin: 10px 0;">
+    <li style="margin-bottom: 12px;">
+        <strong style="color: royalblue;">Kitapçık türünü optik forma işaretlemeyen</strong> öğrencilerin sınavları geçersiz sayılacak ve notu <strong style="color: royalblue;">SIFIR</strong> olarak değerlendirilecektir.<br>
+        <span style="font-size: 12px; color: #718096; font-style: italic;">Exams of students <strong style="color: royalblue;">who do not mark their booklet type on the optical form</strong> will be deemed invalid and will be evaluated as a grade of <strong style="color: royalblue;">ZERO</strong>.</span>
+    </li>
+
+    <li style="margin-bottom: 12px;">
+        <strong style="color: royalblue;">İngilizce</strong> grupta kayıtlı olup da, <strong style="color: royalblue;">Türkçe grupta sınava girenlerin sınavları geçersiz</strong> sayılacaktır.<br>
+        <span style="font-size: 12px; color: #718096; font-style: italic;">Exams of students registered in an <strong style="color: royalblue;">English</strong> section <strong style="color: royalblue;">who take the exam in a Turkish section will be deemed invalid</strong>.</span>
+    </li>
+
+    <li style="margin-bottom: 12px;">
+        Optik formlarda <strong style="color: royalblue;">öğrenci numaraları sola yaslı olarak</strong> kodlanmalı ve numara bitiminden sonra boş kalan kutucuklar doldurulmamalıdır.<br>
+        <span style="font-size: 12px; color: #718096; font-style: italic;">Student IDs must be coded <strong style="color: royalblue;">left-aligned on optical forms</strong>, and any remaining boxes after the ID number must be left blank.</span>
+    </li>
+
+    <li style="margin-bottom: 12px;">
+        Derse ait <strong style="color: royalblue;">grup numarasının optik forma doğru işaretlenmesi</strong> gerekmektedir.<br>
+        <span style="font-size: 12px; color: #718096; font-style: italic;">The <strong style="color: royalblue;">course section (group) number must be correctly marked on the optical form</strong>.</span>
+    </li>
+
+    <li style="margin-bottom: 12px;">
+        Sınav süresince cep telefonları, akıllı saatler ve her türlü elektronik cihaz tamamen kapalı konumda tutulacaktır.<br>
+      <span style="font-size: 12px; color: #718096; font-style: italic;">Mobile phones, smartwatches, and all electronic devices must be kept completely switched off during the exam.</span>
+    </li>
+
+    <li style="margin-bottom: 12px;">
+        Sınav sırasında hesap makinesi kullanılması kesinlikle yasaktır.<br>
+        <span style="font-size: 12px; color: #718096; font-style: italic;">Using a calculator during the exam is strictly prohibited.</span>
+    </li>
+
+    <li style="margin-bottom: 12px;">
+        Yanlış cevaplar doğru cevapları götürmemektedir.<br>
+        <span style="font-size: 12px; color: #718096; font-style: italic;">Incorrect answers do not affect your correct answers (no negative marking).</span>
+    </li>
+
+    <li style="margin-bottom: 12px;">
+        Sınav saatinden en az 15 dakika önce sınav salonunda hazır bulunmanız gerekmektedir.<br>
+       <span style="font-size: 12px; color: #718096; font-style: italic;">You are required to be present at the exam room at least 15 minutes before the exam time.</span>
+    </li>
+
+<li style="margin-bottom: 12px;">
+    <strong style="color: royalblue;">Sınava BU uygulamada belirtilen sınıfta girilmesi zorunludur</strong>.<br>
+    <span style="font-size: 12px; color: #718096; font-style: italic;"><strong style="color: royalblue;">It is mandatory to take the exam in the classroom specified in THIS application</strong>.</span>
+</li>
+
+</ul>
+        </div>
+        
+        <label id="check-label" class="checkbox-container">
+            <input type="checkbox" id="chk-confirm" disabled>
+            <span>Okudum, onaylıyorum. / I accept.</span>
+        </label>
+
+        <hr style="border: 0; border-top: 1px solid #edf2f7; margin: 15px 0;">
+        <button id="btn-approve" class="popup-footer-btn" disabled>DEVAM ET / CONTINUE</button>
+    </div>
+</div>
+
+<!-- Asıl Sorgulama Ekranı -->
+<div id="app-container" class="container">
+    <div class="logo-kapsayici">
+        <img src="logo.png" alt="MATyer Logo" class="logo-png">
+    </div>
+    
+    <!-- Sınav Türü Seçim Alanı -->
+    <label for="examTypeSelect">
+        SORGULANACAK SINAV
+        <span class="en-label">SELECT EXAM</span>
+    </label>
+    <select id="examTypeSelect">
+        <option value="" disabled selected>Sınav seçiniz / Select exam...</option>
+        <option value="arasinav1">1. Arasınav / 1st Midterm</option>
+        <option value="arasinav2">2. Arasınav / 2nd Midterm</option>
+        <option value="final">Yarıyıl Sonu / Final</option>
+        <option value="mazeret">Mazeret / Make-up</option>
+        <option value="butunleme">Bütünleme / Retake (Resit)</option>
+        <option value="mezuniyet">Mezuniyet / Graduation</option>
+    </select>
+
+    <!-- Bütünleme için Sınav Dili Seçim Alanı (Başlangıçta Kesin Gizli) -->
+<!-- Doğru HTML Tanımı -->
+<div id="examLanguageGroup" class="gizli" style="margin-bottom: 15px;">
+    <label for="examLanguageSelect">
+    KAYITLI OLDUĞUNUZ GRUBUN DİLİ
+    <span class="en-label">THE LANGUAGE OF YOUR REGISTERED SECTION</span>
+</label>
+    <select id="examLanguageSelect">
+        <option value="" disabled selected>Grup dilini seçiniz / Select group language...</option>
+        <option value="tr">Türkçe Grup / Turkish Section</option>
+        <option value="en">İngilizce Grup / English Section</option>
+    </select>
+</div>
+
+    <label for="courseSelect">
+        SINAVINA GİRECEĞİNİZ DERS
+        <span class="en-label">COURSE OF THE EXAM</span>
+    </label>
+    <select id="courseSelect">
+        <option value="" disabled selected>Ders seçiniz / Select course...</option>
+        <option value="matematik">MAT1072 Matematik 2</option>
+        <option value="lineer">MAT1320 Lineer Cebir</option>        
+    </select>
+
+    <!-- Kapsayıcı grup: Öğrenci Numarası Alanı -->
+    <div id="studentIdGroup" class="input-group-no">
+        <label for="studentId">
+            ÖĞRENCİ NUMARANIZ
+            <span class="en-label">STUDENT ID NUMBER</span>
+        </label>
+        <input type="text" id="studentId" autocomplete="on">
+    </div>
+    
+    <button class="main-search-btn" onclick="searchExam()">SORGULA / SEARCH</button>
+
+    <div id="result"></div>
+
+    <div style="text-align: center; margin-top: 30px; padding-top: 15px; border-top: 1px dashed #edf2f7;">
+        <span style="font-size: 11px; color: #a0aec0; font-weight: 600; letter-spacing: 0.5px; display: inline-block;">
+            Designed & Developed by <span style="color: #4a5568; font-weight: 700;">Mustafa Düldül</span>
+        </span>
+        <br>
+        <span style="font-size: 10.5px; color: #718096; font-weight: 500; font-style: italic; margin-top: 5px; display: block; letter-spacing: 0.5px;">
+    YTÜ Matematik Bölümü © 2026
+</span>
+    </div>
+
+</div>
+
+
+<script>
+
+document.addEventListener("DOMContentLoaded", () => {
+
+    // --- BURADAN İTİBAREN AŞAĞIDAKİ BLOKU AYNEN YAPIŞTIR ---
+    
+    // Kendi içinde async çalışan güvenli bir blok oluşturduk
+    (async () => {
+        // 1. Tarayıcıdan yerel bildirim göndermek için izin iste
+        if ("Notification" in window && Notification.permission === "default") {
+            await Notification.requestPermission();
+        }
+    })();
+
+    // 2. Uygulama açıldığı için ikonun üzerindeki "1" rakamını temizle (await gerektirmez)
+    if ("clearAppBadge" in navigator) {
+        navigator.clearAppBadge().catch((error) => {
+            console.error("Rozet temizlenirken hata oluştu:", error);
+        });
+    }
+    
+    // Senin mevcut mantığına uyum için cache durumunu sıfırla
+    localStorage.setItem('matyer_badge_cache', 'false');
+});
+
+    const overlay = document.getElementById("terms-overlay");
+    const container = document.getElementById("app-container");
+    const scrollBox = document.getElementById("scroll-box");
+    const checkboxContainer = document.getElementById("check-label");
+    const confirmCheckbox = document.getElementById("chk-confirm");
+    const approveBtn = document.getElementById("btn-approve");
+    
+    const examSelect = document.getElementById("examTypeSelect");
+    const studentIdGroup = document.getElementById("studentIdGroup");
+    const examLanguageGroup = document.getElementById("examLanguageGroup");
+
+    // --- PWA ICON BADGE KONTROL MEKANİZMASI ---
+    const GITHUB_USER = "ytumat34"; 
+    const GITHUB_REPO = "....";
+
+    async function checkNewCommitsForBadge() {
+        if (!('setAppBadge' in navigator)) return;
+        registerPeriodicBackupSync();
+
+        if ('Notification' in window && Notification.permission === 'granted') {
+            executeBadgeLogic();
+        } else if (!('Notification' in window)) {
+            executeBadgeLogic();
+        }
+    
+
+if (isNew) {
+    localStorage.setItem('matyer_badge_cache', 'true');
+    
+    // Eğer uygulama o an açıksa anında ikonun üzerine 1 yazdırır
+    if ("setAppBadge" in navigator) {
+        navigator.setAppBadge(1).catch((error) => {
+            console.error("Rozet ayarlanırken hata oluştu:", error);
+        });
+    }
+}
+}
+
+
+    function executeBadgeLogic() {
+        const apiUrl = `https://api.github.com/repos/${GITHUB_USER}/${GITHUB_REPO}/commits?per_page=1`;
+
+        fetch(apiUrl)
+            .then(response => response.json())
+            .then(async (data) => {
+                if (data && data.length > 0) {
+                    const lastCommitDate = data[0].commit.committer.date;
+                    
+                    const cache = await caches.open('matyer-badge-cache');
+                    const cachedResponse = await cache.match('last_seen_date');
+                    const savedDate = cachedResponse ? await cachedResponse.text() : null;
+
+                    if (!savedDate || new Date(lastCommitDate) > new Date(savedDate)) {
+                        navigator.setAppBadge(1).catch(err => console.log("Badge hatası:", err));
+                    } else {
+                        navigator.clearAppBadge().catch(err => console.log("Badge silme hatası:", err));
+                    }
+                }
+            })
+            .catch(err => console.error("GitHub API kontrolü başarısız:", err));
+    }
+
+    async function registerPeriodicBackupSync() {
+        if ('serviceWorker' in navigator) {
+            const registration = await navigator.serviceWorker.ready;
+            if ('periodicSync' in registration) {
+                try {
+                    await registration.periodicSync.register('check-csv-update', {
+                        minInterval: 12 * 60 * 60 * 1000, 
+                    });
+                } catch (error) {
+                    console.log('Periyodik sync cihaz/tarayıcı kısıtı nedeniyle kaydedilemedi.');
+                }
+            }
+        }
+    }
+
+    checkNewCommitsForBadge();
+    // ------------------------------------------
+    
+    // Sınav türü değişim kontrolü
+    examSelect.addEventListener("change", () => {
+        const val = examSelect.value;
+        
+        if(val === "mazeret" || val === "butunleme" || val === "mezuniyet") {
+            studentIdGroup.classList.add("gizli");
+        } else {
+            studentIdGroup.classList.remove("gizli");
+        }
+
+        if(val === "butunleme") {
+            examLanguageGroup.classList.remove("gizli");
+        } else {
+            examLanguageGroup.classList.add("gizli");
+            const langSelect = document.getElementById("examLanguageSelect");
+            if(langSelect) langSelect.value = ""; 
+        }
+    });
+
+    function checkScroll() {
+        if (!scrollBox) return;
+        const scrollIhtiyaciVarMi = scrollBox.scrollHeight > scrollBox.clientHeight;
+        const metinBittiMi = scrollBox.scrollHeight - scrollBox.scrollTop <= scrollBox.clientHeight + 10;
+        
+        if (!scrollIhtiyaciVarMi || metinBittiMi) {
+            checkboxContainer.classList.add("active");
+            confirmCheckbox.disabled = false;
+        }
+    }
+
+    setTimeout(checkScroll, 100);
+    if (scrollBox) scrollBox.addEventListener("scroll", checkScroll);
+
+    confirmCheckbox.addEventListener("change", () => {
+        approveBtn.disabled = !confirmCheckbox.checked;
+    });
+
+    approveBtn.addEventListener("click", () => {
+        if ('Notification' in window && Notification.permission === 'default') {
+            Notification.requestPermission().then(permission => {
+                if (permission === 'granted') {
+                    executeBadgeLogic();
+                }
+            });
+        }
+
+        overlay.style.transition = "opacity 0.3s ease";
+        overlay.style.opacity = "0";
+        
+        setTimeout(() => {
+            overlay.style.display = "none";
+            container.style.display = "block";
+        }, 300);
+    });
+});
+
+// Arama Fonksiyonu
+function searchExam() {
+    // Kendi iç fonksiyonu olarak tanımladık, scope hatası ihtimali tamamen yok edildi.
+    async function internalSaveDateToCache(dateString) {
+        if ('caches' in window) {
+            const cache = await caches.open('matyer-badge-cache');
+            await cache.put('last_seen_date', new Response(dateString));
+        }
+    }
+
+    const examSelect = document.getElementById('examTypeSelect');
+    const courseSelect = document.getElementById('courseSelect');
+    const languageSelect = document.getElementById('examLanguageSelect');
+    
+    const examType = examSelect.value;
+    const dersKodu = courseSelect.value;
+    const examLanguage = languageSelect ? languageSelect.value : "";
+    const noInput = document.getElementById('studentId');
+    const no = noInput ? noInput.value.trim() : "";
+    const sonucDiv = document.getElementById('result');
+
+    if (!examType) { alert("Lütfen bir sınav seçin. \n\nPlease select an exam."); return; }
+    if (examType === "butunleme" && !examLanguage) { alert("Lütfen bütünleme sınavı için grup dilini seçin. \n\nPlease select the exam group language for the resit exam."); return; }
+    if (!dersKodu) { alert("Lütfen bir ders seçin. \n\nPlease select a course."); return; }
+    
+    const isGeneralMode = (examType === "mazeret" || examType === "butunleme" || examType === "mezuniyet");
+    
+    if (!isGeneralMode && !no) { 
+        alert("Lütfen numaranızı girin. \n\nPlease enter your student ID."); 
+        return; 
+    }
+
+    const secilenMetin = examSelect.options[examSelect.selectedIndex].text;
+    const trSinavAdi = secilenMetin.split('/')[0].trim();
+    const enSinavAdi = secilenMetin.split('/')[1] ? secilenMetin.split('/')[1].trim() : '';
+
+    let dosyaAdi = examType;
+    if (examType === "butunleme") {
+        dosyaAdi = `${examType}_${examLanguage}`;
+    }
+    const dosyaYolu = `${dersKodu}_${dosyaAdi}.csv?v=${new Date().getTime()}`;
+
+    Papa.parse(dosyaYolu, {
+        download: true,
+        header: true,
+        skipEmptyLines: true,
+        encoding: "UTF-8",
+        complete: function(results) {
+            const liste = results.data;
+            
+            const temizListe = liste.map(item => {
+                const yeniObj = {};
+                for (let key in item) {
+                    yeniObj[key.trim().replace(/^\uFEFF/, "")] = item[key];
+                }
+                return yeniObj;
+            });
+
+            const genelBilgi = temizListe[0] || {};
+            const sinavTarihi = genelBilgi.Tarih || '-';
+            const sinavSaati = genelBilgi.Saat || '-';
+            const birlesikDersAdi = `${genelBilgi.Kod || ''} ${genelBilgi.Ders || ''}`.trim();
+
+            sonucDiv.style.display = "block";
+            
+            // --- ROZETİ TEMİZLEME MEKANİZMASI ---
+            localStorage.setItem("matyer_last_seen_date", new Date().toISOString());
+            internalSaveDateToCache(new Date().toISOString());
+
+            if ('clearAppBadge' in navigator) {
+                navigator.clearAppBadge().catch(err => console.log(err));
+            }
+            // ----------------------------------------------------
+
+            if (isGeneralMode) {
+                sonucDiv.className = "basarili";
+
+                let trDersAdi = birlesikDersAdi; 
+                let enDersAdi = "";             
+
+                const kontrolDers = birlesikDersAdi.toLowerCase().trim();
+
+                if (kontrolDers.includes("matematik 1") || kontrolDers.includes("mat1071")) {
+                    trDersAdi = "MAT1071 Matematik 1";
+                    enDersAdi = "MAT1071 Mathematics 1";
+                } else if (kontrolDers.includes("matematik 2") || kontrolDers.includes("mat1072")) {
+                    trDersAdi = "MAT1072 Matematik 2";
+                    enDersAdi = "MAT1072 Mathematics 2";
+                } else if (kontrolDers.includes("lineer cebir") || kontrolDers.includes("mat1320")) {
+                    trDersAdi = "MAT1320 Lineer Cebir";
+                    enDersAdi = "MAT1320 Linear Algebra";
+                } else if (kontrolDers.includes("diferansiyel") || kontrolDers.includes("mat2411")) {
+                    trDersAdi = "MAT2411 Diferansiyel Denklemler";
+                    enDersAdi = "MAT2411 Differential Equations";
+                } else if (kontrolDers.includes("matematik") || kontrolDers.includes("mat1821")) {
+                    trDersAdi = "MAT1821 Matematik";
+                    enDersAdi = "MAT1821 Mathematics";
+                }
+
+                const benzersizSalonlar = [];
+                const kontrolSeti = new Set();
+
+                temizListe.forEach(satir => {
+                    const fak = (satir.Fakulte || '').trim();
+                    const derslik = (satir.Derslik || '').trim();
+                    if(fak || derslik) {
+                        const anahtar = `${fak}|||${derslik}`;
+                        if(!kontrolSeti.has(anahtar)){
+                            kontrolSeti.add(anahtar);
+                            benzersizSalonlar.push({ fakulte: fak, derslik: derslik });
+                        }
+                    }
+                });
+
+                let salonlarHTML = '';
+                benzersizSalonlar.forEach(s => {
+                    salonlarHTML += `
+                        <div style="border-bottom: 1px dashed #e2e8f0; padding: 10px 0; margin-bottom: 5px;">
+                            <small style="color: #718096; font-size: 11px; font-weight: 600; display:block; text-transform:uppercase;">${s.fakulte || '-'}</small>
+                            <span style="font-size: 1.5rem; font-weight: 800; color: #c53030;">${s.derslik || '-'}</span>
+                        </div>
+                    `;
+                });
+
+                let uyariMetniTR = "";
+                let uyariMetniEN = "";
+                let formLinki = "";
+
+                switch(examType) {
+                    case "mazeret":
+                        uyariMetniTR = `1. Mazeret sınavına sadece ilgili bölüm başkanlığı tarafından mazereti kabul edilen öğrenciler girebilir.<br>
+                                        2. Soru kitapçığı israfını önlemek ve planlama yapmak adına sınava katılacaksanız lütfen formu doldurunuz.`;
+                        uyariMetniEN = `1. Only students whose excuses are officially accepted can take the make-up exam.<br>
+                                        2. Please fill out the form if you will attend, to help us prevent exam booklet waste.`;
+                        formLinki = "https://forms.office.com/r/fpesHVAg1L";
+                        break;
+                    case "butunleme":
+                        uyariMetniTR = `1. İlgili dersten Final harf notu <span style="background:#feebc8; padding:2px 4px; border-radius:4px; font-weight:700;">CC veya üzeri</span> olan öğrenciler bütünleme sınavına <span style="background:#feebc8; padding:2px 4px; border-radius:4px; font-weight:700;">katılamazlar</span>.<br>
+                                        2. Basılacak soru kitapçığı sayısını belirlemek ve israfı önlemek adına sınava kesin katılacaksanız lütfen formu doldurunuz.`;
+                        uyariMetniEN = `1. Students with a grade of CC or higher are not eligible for the resit exam.<br>
+                                        2. To prevent booklet waste and assist with planning, please fill out the form if you will definitely attend.`;
+                        formLinki = "https://forms.office.com/r/fpesHVAg1L";
+                        break;
+                    case "mezuniyet":
+                        uyariMetniTR = `1. Mezuniyet sınavına sadece mezun olabilecek durumda olan öğrenciler katılabilir.<br>
+                                        2. Katılım durumunuzu bildirmek ve soru kitapçığı planlamasına yardımcı olmak için lütfen formu doldurunuz.`;
+                        uyariMetniEN = `1. Only students who are in a position to graduate are eligible to take the graduation exam.<br>
+                                        2. Please fill out the form to confirm your attendance and help us estimate the number of booklets needed.`;
+                        formLinki = "https://forms.office.com/r/fpesHVAg1L";
+                        break;
+                }
+
+                sonucDiv.innerHTML = `
+                    <div style="display: flex; justify-content: space-around; margin: 20px 20px 15px 20px; padding: 12px; background: #f8fafc; border-radius: 12px; border: 1px solid #edf2f7;">
+                        <div>
+                            <small style="color: #7f8c8d; display: block; font-size: 10px; font-weight: bold; letter-spacing: 0.5px;">TARİH / DATE</small>
+                            <span style="font-weight: 700; color: #2d3748; font-size: 14px;">${sinavTarihi}</span>
+                        </div>
+                        <div style="border-left: 1px solid #e2e8f0;"></div>
+                        <div>
+                            <small style="color: #7f8c8d; display: block; font-size: 10px; font-weight: bold; letter-spacing: 0.5px;">SAAT / TIME</small>
+                            <span style="font-weight: 700; color: #2d3748; font-size: 14px;">${sinavSaati}</span>
+                        </div>
+                    </div>
+
+                    <div style="margin: 0 20px 20px 20px; text-align: center;">
+                        <div style="background: #ebf8ff; padding: 15px; border-radius: 12px; border: 2px solid #bee3f8; margin-bottom: 15px;">
+                            <small style="color: #2b6cb0; display: block; font-size: 11px; font-weight: 800; margin-bottom: 5px; letter-spacing: 1px;">DERS / COURSE</small>
+                            <div style="font-size: 1.1rem; font-weight: 700; color: #2c5282; line-height: 1.3;">
+                                ${trDersAdi}
+                                ${enDersAdi ? `<br><span style="font-size: 0.95rem; color: #718096; font-weight: 600; font-style: italic;">${enDersAdi}</span>` : ''}
+                            </div>
+                        </div>
+
+                        <div style="background: #f7fafc; padding: 12px; border-radius: 12px; border: 2px solid #e2e8f0; margin-bottom: 15px;">
+                            <small style="color: #4a5568; display: block; font-size: 11px; font-weight: 800; margin-bottom: 5px; letter-spacing: 1px;">SINAV / EXAM</small>
+                            <div style="font-size: 1.1rem; font-weight: 700; color: #4a5568; line-height: 1.3;">
+                                ${trSinavAdi.toLowerCase().includes('arasınav') || trSinavAdi.toLowerCase().includes('sınav') ? trSinavAdi : `${trSinavAdi} Sınavı`}
+                                ${enSinavAdi ? `
+                                    <br><span style="font-size: 0.95rem; color: #a0aec0; font-weight: 600; font-style: italic;">
+                                        ${enSinavAdi.toLowerCase().includes('midterm') ? enSinavAdi : `${enSinavAdi} Exam`}
+                                    </span>
+                                ` : ''}
+                            </div>
+                        </div>
+
+                        <div style="background: #fff5f5; padding: 15px 20px 20px 20px; border-radius: 12px; border: 2px solid #feb2b2; margin-bottom: 20px;">
+                            <small style="color: #e53e3e; display: block; font-size: 11px; font-weight: 800; margin-bottom: 10px; letter-spacing: 1px;">SINAV SALONLARI / EXAM HALLS</small>
+                            ${salonlarHTML}
+                        </div>
+                    </div>
+
+                    <div style="text-align: center; margin: -5px 0 25px 0; color: #dd6b20; font-weight: 700; font-size: 13px; animation: pulseAnimation 2s infinite;">
+                        👇 Lütfen sayfanın altındaki Katılım Formu'nu doldurunuz! 👇 <br>
+                        <span style="font-size: 11px; font-style: italic; color: #b7791f; font-weight: 600;">Please fill out the Attendance Form located at the bottom!</span>
+                    </div>
+
+                    <div style="margin: 0 20px 20px 20px; background: #fffaf0; border: 2px solid #feebc8; padding: 15px; border-radius: 12px; text-align: left; box-shadow: 0 4px 6px rgba(0,0,0,0.02);">
+                        <div style="color: #dd6b20; font-weight: 800; font-size: 12px; letter-spacing: 0.5px; margin-bottom: 10px; text-transform: uppercase;">
+                            ⚠️ ÖNEMLİ BİLGİLENDİRME & KATILIM FORMU
+                        </div>
+                        <div style="font-size: 13px; color: #2d3748; line-height: 1.5; margin-bottom: 12px;">
+                            ${uyariMetniTR}
+                        </div>
+                        <div style="font-size: 12px; color: #718096; line-height: 1.4; font-style: italic; border-top: 1px dashed #fbd38d; padding-top: 10px; margin-bottom: 15px;">
+                            ${uyariMetniEN}
+                        </div>
+                        <a href="${formLinki}" target="_blank" class="katilim-butonu" style="display: block; text-align: center; background: #dd6b20; color: white; text-decoration: none; padding: 14px; border-radius: 8px; font-weight: 800; font-size: 14px; letter-spacing: 1px; text-transform: uppercase; box-shadow: 0 4px 15px rgba(221, 107, 32, 0.4); animation: pulseAnimation 2s infinite; transition: all 0.2s;">
+                            📝 FORMU DOLDUR / FILL OUT THE FORM
+                        </a>
+                    </div>
+
+                    <div style="border-top: 1px solid #edf2f7; padding: 15px 20px; color: #4a5568; font-size: 13px; line-height: 1.6;">
+                        <div style="padding: 12px; background: #fffaf0; border-radius: 8px; border-left: 4px solid #f6ad55;">
+                            <p style="margin: 0; font-weight: 600; color: #7b341e;">NOT / NOTE:</p>
+                            <p style="margin: 4px 0 0 0;">Bu sınav için kişiye özel salon atanmamıştır. Yukarıda ilan edilen dersliklerdeki boş sıralara yerleşebilirsiniz.</p>
+                            <p style="margin: 4px 0 0 0; color: #718096; font-style: italic; font-size: 12px;">No specific hall has been assigned for this exam. You can take any empty seat in the halls listed above.</p>
+                        </div>
+                    </div>
+                `;
+                return; 
+            }
+
+            const student = temizListe.find(o => String(o.No).trim() === no);
+            
+            if (student) {
+                sonucDiv.className = "basarili";
+                const tamAd = `${student.Ad || ''} ${student.Soyad || ''}`;
+                const dersGorselAdi = `${student.Kod || ''} ${student.Ders || ''}`.trim();
+                
+                sonucDiv.innerHTML = `
+                    <div style="text-align: center; border-bottom: 1px solid #eee; padding: 20px 10px 10px 10px; margin-bottom: 20px;">
+                        <span style="font-size: 1.1rem; color: #2c3e50;">Sayın / Dear</span><br>
+                        <strong style="font-size: 1.4rem; color: #1a73e8; text-transform: uppercase;">${tamAd}</strong>
+                    </div>
+
+                    <div style="display: flex; justify-content: space-around; margin: 0 20px 20px 20px; padding: 10px; background: #f8fafc; border-radius: 8px;">
+                        <div>
+                            <small style="color: #7f8c8d; display: block; font-size: 10px; font-weight: bold;">TARİH / DATE</small>
+                            <span style="font-weight: 600; color: #2d3748;">${sinavTarihi}</span>
+                        </div>
+                        <div style="border-left: 1px solid #e2e8f0;"></div>
+                        <div>
+                            <small style="color: #7f8c8d; display: block; font-size: 10px; font-weight: bold;">SAAT / TIME</small>
+                            <span style="font-weight: 600; color: #2d3748;">${sinavSaati}</span>
+                        </div>
+                    </div>
+
+                    <div style="margin: 0 20px 20px 20px; text-align: center;">
+                        <div style="background: #ebf8ff; padding: 15px; border-radius: 12px; border: 2px solid #bee3f8; margin-bottom: 15px;">
+                            <small style="color: #2b6cb0; display: block; font-size: 11px; font-weight: 800; margin-bottom: 5px; letter-spacing: 1px;">DERS / COURSE</small>
+                            <div style="font-size: 1.1rem; font-weight: 700; color: #2c5282; line-height: 1.3;">${dersGorselAdi}</div>
+                        </div>
+
+                        <div style="background: #f7fafc; padding: 12px; border-radius: 12px; border: 2px solid #e2e8f0; margin-bottom: 15px;">
+                            <small style="color: #4a5568; display: block; font-size: 11px; font-weight: 800; margin-bottom: 5px; letter-spacing: 1px;">SINAV / EXAM</small>
+                            <div style="font-size: 1.1rem; font-weight: 700; color: #4a5568; line-height: 1.3;">
+                                ${trSinavAdi.toLowerCase().includes('arasınav') || trSinavAdi.toLowerCase().includes('sınav') ? trSinavAdi : `${trSinavAdi} Sınavı`}
+                                ${enSinavAdi ? `
+                                    <br><span style="font-size: 0.95rem; color: #a0aec0; font-weight: 600; font-style: italic;">
+                                        ${enSinavAdi.toLowerCase().includes('midterm') ? enSinavAdi : `${enSinavAdi} Exam`}
+                                    </span>
+                                ` : ''}
+                            </div>
+                        </div>
+
+                        <div style="background: #fff5f5; padding: 20px; border-radius: 12px; border: 2px solid #feb2b2;">
+                            <small style="color: #e53e3e; display: block; font-size: 11px; font-weight: 800; margin-bottom: 0px; letter-spacing: 1px;">FAKÜLTE / FACULTY</small>                            
+                            <div style="font-size: 1rem; color: #4a5568; font-weight: 600; margin-bottom: 12px; line-height: 1.2;">${student.Fakulte || '-'}</div> 
+                            
+                            <small style="color: #e53e3e; display: block; font-size: 11px; font-weight: 800; margin-bottom: -5px; letter-spacing: 1px;">SINAV SALONU / EXAM HALL</small>
+                            <div style="font-size: 2.3rem; font-weight: 900; color: #c53030; line-height: 1; margin-top: 5px;">${student.Derslik || '-'}</div>
+                        </div>
+                    </div>
+
+                    <div style="border-top: 1px solid #edf2f7; padding: 15px 20px; color: #4a5568; font-size: 13px; line-height: 1.6;">
+                        <div style="padding: 12px; background: #fffaf0; border-radius: 8px; border-left: 4px solid #f6ad55;">
+                            <p style="margin: 0; font-weight: 600; color: #7b341e;">HATIRLATMA / REMINDER:</p>
+                            <p style="margin: 4px 0 0 0;">Sınav saatinden en az 15 dakika önce öğrenci kimliğinizle birlikte ilgili salonda hazır bulununuz.</p>
+                            <p style="margin: 4px 0 0 0; color: #718096; font-style: italic; font-size: 12px;">Please be present in the relevant hall at least 15 minutes before the exam with your student ID.</p>
+                        </div>
+                    </div>
+                `;
+            } else {
+                sonucDiv.className = "hata";
+                sonucDiv.innerHTML = `
+                    <div style="text-align: center; padding: 10px;">
+                        <strong style="font-size: 1.1rem; color: #9b2c2c; display: block; margin-bottom: 5px;">
+                            🔍 Kayıt Bulunamadı / Record Not Found
+                        </strong>
+                        <span style="font-size: 0.95rem; color: #4a5568; font-weight: 600;">
+                            Lütfen numaranızı ve dersinizi kontrol ediniz.
+                        </span>
+                        <br>
+                        <span style="font-size: 0.85rem; color: #718096; font-style: italic;">
+                            Please check your student ID and course.
+                        </span>
+                    </div>
+
+                    <div style="margin-top: 15px; background: #fff5f5; border: 1px solid #fed7d7; padding: 12px; border-radius: 8px; text-align: center; font-size: 13px; line-height: 1.5;">
+                        <p style="margin: 0 0 4px 0; color: #2d3748; font-weight: 600;">
+                            ⚠️ BİLGİLERİNİZ DOĞRU OLDUĞU HALDE BU UYARIYI ALIYORSANIZ, durumu lütfen <a href="mailto:matblm@yildiz.edu.tr" style="color: #9b2c2c; font-weight: 700; text-decoration: underline;">matblm@yildiz.edu.tr</a> adresine bildiriniz.
+                        </p>
+                        <p style="margin: 0; font-style: italic; color: #718096; font-size: 12px; border-top: 1px dashed #feb2b2; margin-top: 6px; padding-top: 6px;">
+                            If your information is correct but you still see this warning, please report the issue to <a href="mailto:matblm@yildiz.edu.tr" style="color: #9b2c2c; font-style: normal; font-weight: 600; text-decoration: underline;">matblm@yildiz.edu.tr</a>.
+                        </p>
+                    </div>
+                `;
+            }
+        },
+        error: function() {
+            alert("Seçtiğiniz sınav için henüz derslikler sisteme yüklenmedi. Lütfen daha sonra tekrar kontrol ediniz. \n\nClassrooms have not been uploaded for the selected exam type yet. Please check back later.");
+        }
+    });
+}
+</script>
+
+
+</body>
+</html>
