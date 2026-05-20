@@ -637,15 +637,27 @@ function executeBadgeLogic() {
 
 async function registerPeriodicBackupSync() {
     if ('serviceWorker' in navigator) {
-        const registration = await navigator.serviceWorker.ready;
-        if ('periodicSync' in registration) {
-            try {
-                await registration.periodicSync.register('check-csv-update', {
-                    minInterval: 12 * 60 * 60 * 1000, 
+        try {
+            const registration = await navigator.serviceWorker.ready;
+            
+            // Tarayıcının periyodik arka plan senkronizasyon yeteneği var mı?
+            if ('periodicSync' in registration) {
+                // Tarayıcı izin durumunu kontrol et
+                const status = await navigator.permissions.query({
+                    name: 'periodic-background-sync',
                 });
-            } catch (error) {
-                console.log('Periyodik sync cihaz/tarayıcı kısıtı nedeniyle kaydedilemedi.');
+                
+                if (status.state === 'granted') {
+                    // Sistemden minimum 12 saatte bir (veya tarayıcının uygun gördüğü en kısa sürede) 
+                    // arka planda uyanma izni talep ediyoruz
+                    await registration.periodicSync.register('check-csv-update', {
+                        minInterval: 12 * 60 * 60 * 1000, 
+                    });
+                    console.log('Arka plan periyodik kontrolü başarıyla sisteme kaydedildi.');
+                }
             }
+        } catch (error) {
+            console.error('Periyodik sync kaydı sırasında bir hata oluştu:', error);
         }
     }
 }

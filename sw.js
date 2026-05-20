@@ -3,14 +3,16 @@ const ASSETS_TO_CACHE = [
   './',
   './index.html',
   './manifest.json'
-  // Varsa './script.js' veya './style.css' gibi dosyalarınızı da buraya ekleyin hocam
 ];
 
 const GITHUB_USER = "ytumat34";
 const GITHUB_REPO = "matyer";
 const API_URL = `https://api.github.com/repos/${GITHUB_USER}/${GITHUB_REPO}/commits?per_page=1`;
 
-// KURULUM: Dosyaları önbelleğe al
+// =========================================================================
+// 1. KURULUM VE AKTİVASYON (Önbellek Yönetimi)
+// =========================================================================
+
 self.addEventListener('install', (event) => {
   event.waitUntil(
     caches.open(CACHE_NAME).then((cache) => {
@@ -20,7 +22,6 @@ self.addEventListener('install', (event) => {
   self.skipWaiting();
 });
 
-// AKTİVASYON: Eski v1, v2, v2.1 önbelleklerini tamamen temizle (Kilitlenmeyi çözen kısım)
 self.addEventListener('activate', (event) => {
   event.waitUntil(
     caches.keys().then((cacheNames) => {
@@ -35,32 +36,35 @@ self.addEventListener('activate', (event) => {
   );
 });
 
-// STRATEJİ: CSV'ler hariç her şeyi akıllıca önbellekle ve dinamik olarak güncelle
+// =========================================================================
+// 2. STRATEJİ: CSV'ler Hariç Önbellekleme & Dinamik Güncelleme
+// =========================================================================
+
 self.addEventListener('fetch', (event) => {
   const url = event.request.url;
   
-  // CSV dosyaları asla önbelleğe girmez, hep canlı çekilir
+  // CSV dosyaları asla önbelleğe girmemeli, hep canlı çekilmeli
   if (url.includes('.csv')) {
     event.respondWith(fetch(event.request));
     return;
   }
 
-  // --- YENİ EKLEME: Öğrenci siteye her girdiğinde veya veri çektiğinde arkada çaktırmadan commit kontrolü yap
-  if (url.includes(API_URL)) {
-    event.waitUntil(checkGitHubCommitsForBadge());
+  // GitHub API isteklerini doğrudan internetten getir, askıda bırakma
+  if (url.includes('api.github.com')) {
+    event.respondWith(fetch(event.request));
+    return;
   }
 
-  // Diğer statik kaynaklar için akıllı kontrol
+  // Diğer statik kaynaklar için Stale-While-Revalidate stratejisi
   event.respondWith(
     caches.open(CACHE_NAME).then((cache) => {
       return cache.match(event.request).then((cachedResponse) => {
-        // Eğer dosya önbellekte varsa getir, aynı anda arka planda ağdan güncelini çekip önbelleği tazele
         const networkFetch = fetch(event.request).then((networkResponse) => {
           if (networkResponse.status === 200) {
             cache.put(event.request, networkResponse.clone());
           }
           return networkResponse;
-        }).catch(() => null); // Çevrimdışı hatası vermesin diye
+        }).catch(() => null);
 
         return cachedResponse || networkFetch;
       });
@@ -69,39 +73,43 @@ self.addEventListener('fetch', (event) => {
 });
 
 // =========================================================================
-// PWA ICON BADGE & ARKA PLAN KONTROL MEKANİZMASI (GÜNCELLENDİ)
+// 3. PWA EVENT LISTENERS (Mesaj, Periyodik Senkronizasyon ve Tıklama)
 // =========================================================================
 
+// Arka planda (Uygulama kapalıyken) işletim sisteminden gelen tetiklenme (Doğru yazım: periodicsync)
 self.addEventListener('periodicsync', (event) => {
   if (event.tag === 'check-csv-update') {
     event.waitUntil(checkGitHubCommitsForBadge());
   }
 });
 
+// Uygulama içinden manuel tetikleme gelirse
 self.addEventListener('message', (event) => {
   if (event.data && event.data.action === 'executeBadge') {
     event.waitUntil(checkGitHubCommitsForBadge());
   }
 });
 
-// --- YENİ BİLDİRİM DİNLEYİCİSİ: Öğrenci bildirime tıkladığında uygulamayı açar ---
+// Öğrenci bildirime tıkladığında uygulamayı ön plana getirme veya açma
 self.addEventListener('notificationclick', (event) => {
-  event.notification.close(); // Bildirimi kapat
+  event.notification.close(); 
   event.waitUntil(
     self.clients.matchAll({ type: 'window' }).then((clientList) => {
-      // Eğer uygulama arka planda zaten açıksa ona odaklan (focus yap)
       for (const client of clientList) {
         if (client.url.includes('index.html') && 'focus' in client) {
           return client.focus();
         }
       }
-      // Açık değilse sıfırdan ana sayfayı aç
       if (clients.openWindow) {
         return clients.openWindow('./index.html');
       }
     })
   );
 });
+
+// =========================================================================
+// 4. KÜRESEL TEK ANA KONTROL FONKSİYONU (Döngüleri Engelleyen Güvenli Yapı)
+// =========================================================================
 
 async function checkGitHubCommitsForBadge() {
   try {
@@ -119,7 +127,7 @@ async function checkGitHubCommitsForBadge() {
         savedDate = await cachedResponse.text();
       }
 
-      // Eğer yeni bir commit (yeni bir CSV) varsa!
+      // EĞER YENİ BİR COMMIT VARSA
       if (!savedDate || new Date(lastCommitDate) > new Date(savedDate)) {
         
         // 1. İkonun üzerine "1" rakamını yerleştir
@@ -127,23 +135,19 @@ async function checkGitHubCommitsForBadge() {
           await self.navigator.setAppBadge(1);
         }
 
-        // 2. Öğrencinin telefon ekranına Push Bildirimi fırlat
+        // 2. Bildirimi fırlat (Hem ön plan hem arka plan için ortak başlık)
         await self.registration.showNotification("MATyer Güncellendi!", {
-          body: "Yeni sınav yerleri yüklendi. Kontrol etmek için tıklayın.",
-          icon: "icon.png", // manifest.json dosyanızdaki ikon ismi neyse tam aynısı olmalı
+          body: "Yeni sınav yerleri yayınlandı. Kontrol etmek için tıklayın.",
+          icon: "icon.png", 
           badge: "icon.png",
           vibrate: [200, 100, 200],
+          tag: "csv-update-notification",
+          renotify: true,
           data: { url: "./index.html" }
         });
 
-        // 3. Döngüye girmemesi için yeni tarihi hemen önbelleğe kaydet
+        // 3. KRİTİK: Sonsuz bildirime girmemesi için yeni tarihi HEMEN cache'e yaz
         await cache.put('last_seen_date', new Response(lastCommitDate));
-
-      } else {
-        // Yeni güncelleme yoksa ve ikon üstünde eski rozet kalmışsa temizleyebiliriz
-        if ('clearAppBadge' in self.navigator && savedDate === lastCommitDate) {
-          // Uygulama açık değilse durduk yere rozeti silme mantığı (isteğe bağlı)
-        }
       }
     }
   } catch (err) {
