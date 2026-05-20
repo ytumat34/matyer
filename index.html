@@ -482,7 +482,6 @@
 
 
 <script>
-
 document.addEventListener("DOMContentLoaded", () => {
 
     // =========================================================================
@@ -506,7 +505,7 @@ document.addEventListener("DOMContentLoaded", () => {
     localStorage.setItem('matyer_badge_cache', 'false');
 
     // =========================================================================
-    // 2. DOM ELEMENT TANIMLAMALARI (Artık DOMContentLoaded İçinde - Güvenli)
+    // 2. DOM ELEMENT TANIMLAMALARI (Güvenli Alan)
     // =========================================================================
     const overlay = document.getElementById("terms-overlay");
     const container = document.getElementById("app-container");
@@ -519,22 +518,86 @@ document.addEventListener("DOMContentLoaded", () => {
     const studentIdGroup = document.getElementById("studentIdGroup");
     const examLanguageGroup = document.getElementById("examLanguageGroup");
 
-    // NOT: Onay butonuna basma, checkbox kontrolü ve init() gibi senin 
-    // kendi orijinal kodların da tam BURADA (DOMContentLoaded içinde) yer almalı hocam.
+    // =========================================================================
+    // 3. EVENT LISTENERS VE ONAY MEKANİZMASI
+    // =========================================================================
+    
+    // Sınav türü değişim kontrolü
+    if (examSelect) {
+        examSelect.addEventListener("change", () => {
+            const val = examSelect.value;
+            
+            if (val === "mazeret" || val === "butunleme" || val === "mezuniyet") {
+                if (studentIdGroup) studentIdGroup.classList.add("gizli");
+            } else {
+                if (studentIdGroup) studentIdGroup.classList.remove("gizli");
+            }
 
-}); // DOMContentLoaded burada güvenle bitiyor.
+            if (val === "butunleme") {
+                if (examLanguageGroup) examLanguageGroup.classList.remove("gizli");
+            } else {
+                if (examLanguageGroup) examLanguageGroup.classList.add("gizli");
+                const langSelect = document.getElementById("examLanguageSelect");
+                if (langSelect) langSelect.value = ""; 
+            }
+        });
+    }
+
+    function checkScroll() {
+        if (!scrollBox || !confirmCheckbox || !checkboxContainer) return;
+        const scrollIhtiyaciVarMi = scrollBox.scrollHeight > scrollBox.clientHeight;
+        const metinBittiMi = scrollBox.scrollHeight - scrollBox.scrollTop <= scrollBox.clientHeight + 10;
+        
+        if (!scrollIhtiyaciVarMi || metinBittiMi) {
+            checkboxContainer.classList.add("active");
+            confirmCheckbox.disabled = false;
+        }
+    }
+
+    setTimeout(checkScroll, 100);
+    if (scrollBox) scrollBox.addEventListener("scroll", checkScroll);
+
+    if (confirmCheckbox && approveBtn) {
+        confirmCheckbox.addEventListener("change", () => {
+            approveBtn.disabled = !confirmCheckbox.checked;
+        });
+    }
+
+    if (approveBtn && overlay && container) {
+        approveBtn.addEventListener("click", () => {
+            if ('Notification' in window && Notification.permission === 'default') {
+                Notification.requestPermission().then(permission => {
+                    if (permission === 'granted') {
+                        executeBadgeLogic();
+                    }
+                });
+            }
+
+            overlay.style.transition = "opacity 0.3s ease";
+            overlay.style.opacity = "0";
+            
+            setTimeout(() => {
+                overlay.style.display = "none";
+                container.style.display = "block";
+            }, 300);
+        });
+    }
+
+    // İlk açılışta commit badge kontrolünü tetikle
+    checkNewCommitsForBadge();
+
+}); // DOMContentLoaded burada SAĞLIKLA bitiyor. All listeners are safe now.
 
 
 // =============================================================================
-// 3. PWA ICON BADGE KONTROL MEKANİZMASI (Fonksiyonlar Dışarıda Kalabilir)
+// 4. PWA ICON BADGE KONTROL MEKANİZMASI (Küresel Fonksiyonlar)
 // =============================================================================
 const GITHUB_USER = "ytumat34"; 
-const GITHUB_REPO = "matyer"; // "...." olan yeri repo adınla güncelledim hocam
+const GITHUB_REPO = "matyer"; 
 
 async function checkNewCommitsForBadge() {
     if (!('setAppBadge' in navigator)) return;
     
-    // Eğer bu fonksiyonun yoksa konsolda hata vermemesi için kontrol ekleyebilirsin
     if (typeof registerPeriodicBackupSync === "function") {
         registerPeriodicBackupSync();
     }
@@ -572,83 +635,25 @@ function executeBadgeLogic() {
         .catch(err => console.error("GitHub API kontrolü başarısız:", err));
 }
 
-    async function registerPeriodicBackupSync() {
-        if ('serviceWorker' in navigator) {
-            const registration = await navigator.serviceWorker.ready;
-            if ('periodicSync' in registration) {
-                try {
-                    await registration.periodicSync.register('check-csv-update', {
-                        minInterval: 12 * 60 * 60 * 1000, 
-                    });
-                } catch (error) {
-                    console.log('Periyodik sync cihaz/tarayıcı kısıtı nedeniyle kaydedilemedi.');
-                }
+async function registerPeriodicBackupSync() {
+    if ('serviceWorker' in navigator) {
+        const registration = await navigator.serviceWorker.ready;
+        if ('periodicSync' in registration) {
+            try {
+                await registration.periodicSync.register('check-csv-update', {
+                    minInterval: 12 * 60 * 60 * 1000, 
+                });
+            } catch (error) {
+                console.log('Periyodik sync cihaz/tarayıcı kısıtı nedeniyle kaydedilemedi.');
             }
         }
     }
+}
 
-    checkNewCommitsForBadge();
-    // ------------------------------------------
-    
-    // Sınav türü değişim kontrolü
-    examSelect.addEventListener("change", () => {
-        const val = examSelect.value;
-        
-        if(val === "mazeret" || val === "butunleme" || val === "mezuniyet") {
-            studentIdGroup.classList.add("gizli");
-        } else {
-            studentIdGroup.classList.remove("gizli");
-        }
-
-        if(val === "butunleme") {
-            examLanguageGroup.classList.remove("gizli");
-        } else {
-            examLanguageGroup.classList.add("gizli");
-            const langSelect = document.getElementById("examLanguageSelect");
-            if(langSelect) langSelect.value = ""; 
-        }
-    });
-
-    function checkScroll() {
-        if (!scrollBox) return;
-        const scrollIhtiyaciVarMi = scrollBox.scrollHeight > scrollBox.clientHeight;
-        const metinBittiMi = scrollBox.scrollHeight - scrollBox.scrollTop <= scrollBox.clientHeight + 10;
-        
-        if (!scrollIhtiyaciVarMi || metinBittiMi) {
-            checkboxContainer.classList.add("active");
-            confirmCheckbox.disabled = false;
-        }
-    }
-
-    setTimeout(checkScroll, 100);
-    if (scrollBox) scrollBox.addEventListener("scroll", checkScroll);
-
-    confirmCheckbox.addEventListener("change", () => {
-        approveBtn.disabled = !confirmCheckbox.checked;
-    });
-
-    approveBtn.addEventListener("click", () => {
-        if ('Notification' in window && Notification.permission === 'default') {
-            Notification.requestPermission().then(permission => {
-                if (permission === 'granted') {
-                    executeBadgeLogic();
-                }
-            });
-        }
-
-        overlay.style.transition = "opacity 0.3s ease";
-        overlay.style.opacity = "0";
-        
-        setTimeout(() => {
-            overlay.style.display = "none";
-            container.style.display = "block";
-        }, 300);
-    });
-});
-
-// Arama Fonksiyonu
+// =============================================================================
+// 5. ARAMA VE CSV PARSE FONKSİYONU
+// =============================================================================
 function searchExam() {
-    // Kendi iç fonksiyonu olarak tanımladık, scope hatası ihtimali tamamen yok edildi.
     async function internalSaveDateToCache(dateString) {
         if ('caches' in window) {
             const cache = await caches.open('matyer-badge-cache');
@@ -660,8 +665,8 @@ function searchExam() {
     const courseSelect = document.getElementById('courseSelect');
     const languageSelect = document.getElementById('examLanguageSelect');
     
-    const examType = examSelect.value;
-    const dersKodu = courseSelect.value;
+    const examType = examSelect ? examSelect.value : "";
+    const dersKodu = courseSelect ? courseSelect.value : "";
     const examLanguage = languageSelect ? languageSelect.value : "";
     const noInput = document.getElementById('studentId');
     const no = noInput ? noInput.value.trim() : "";
@@ -709,7 +714,7 @@ function searchExam() {
             const sinavSaati = genelBilgi.Saat || '-';
             const birlesikDersAdi = `${genelBilgi.Kod || ''} ${genelBilgi.Ders || ''}`.trim();
 
-            sonucDiv.style.display = "block";
+            if (sonucDiv) sonucDiv.style.display = "block";
             
             // --- ROZETİ TEMİZLEME MEKANİZMASI ---
             localStorage.setItem("matyer_last_seen_date", new Date().toISOString());
@@ -720,7 +725,7 @@ function searchExam() {
             }
             // ----------------------------------------------------
 
-            if (isGeneralMode) {
+            if (isGeneralMode && sonucDiv) {
                 sonucDiv.className = "basarili";
 
                 let trDersAdi = birlesikDersAdi; 
@@ -871,7 +876,7 @@ function searchExam() {
 
             const student = temizListe.find(o => String(o.No).trim() === no);
             
-            if (student) {
+            if (student && sonucDiv) {
                 sonucDiv.className = "basarili";
                 const tamAd = `${student.Ad || ''} ${student.Soyad || ''}`;
                 const dersGorselAdi = `${student.Kod || ''} ${student.Ders || ''}`.trim();
@@ -929,7 +934,7 @@ function searchExam() {
                         </div>
                     </div>
                 `;
-            } else {
+            } else if (sonucDiv) {
                 sonucDiv.className = "hata";
                 sonucDiv.innerHTML = `
                     <div style="text-align: center; padding: 10px;">
@@ -961,6 +966,8 @@ function searchExam() {
         }
     });
 }
+
+
 </script>
 
 
