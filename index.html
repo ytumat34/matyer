@@ -7,25 +7,14 @@
     <link rel="manifest" href="manifest.json">
 
     <!-- iOS (iPhone) için uygulama ikonu ve ayarları -->
+    <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="apple-mobile-web-app-title" content="MATyer">
     <link class="apple-touch-icon" href="icon.png">
 
     <!-- Tema Rengi (Android üst bar rengi) -->
-    <meta name="theme-color" content="#1a365d">
+    <meta name="theme-color" content="#3182ce">
     <title>Sınav Yeri Sorgulama | Exam Location Inquiry</title>
-
-    <!-- PWA Service Worker Kayıt Kodu -->
-    <script>
-      if ('serviceWorker' in navigator) {
-        window.addEventListener('load', () => {
-          navigator.serviceWorker.register('sw.js')
-            .then(reg => console.log('PWA Altyapısı Aktif (SW Registered)'))
-            .catch(err => console.error('SW Kayıt Hatası:', err));
-        });
-      }
-    </script>
-
     <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.2/papaparse.min.js"></script>
    <style>
 
@@ -394,7 +383,7 @@
 </li>
 
 </ul>
-    </div>
+        </div>
         
         <label id="check-label" class="checkbox-container">
             <input type="checkbox" id="chk-confirm" disabled>
@@ -447,8 +436,8 @@
     </label>
     <select id="courseSelect">
         <option value="" disabled selected>Ders seçiniz / Select course...</option>
-        <option value="mat1072">MAT1072 Matematik 2</option>
-        <option value="mat1320">MAT1320 Lineer Cebir</option>        
+        <option value="matematik">MAT1072 Matematik 2</option>
+        <option value="lineer">MAT1320 Lineer Cebir</option>        
     </select>
 
     <!-- Kapsayıcı grup: Öğrenci Numarası Alanı -->
@@ -470,7 +459,7 @@
         </span>
         <br>
         <span style="font-size: 10.5px; color: #718096; font-weight: 500; font-style: italic; margin-top: 5px; display: block; letter-spacing: 0.5px;">
-     YTÜ Matematik Bölümü © 2026
+    YTÜ Matematik Bölümü © 2026
 </span>
     </div>
 
@@ -479,27 +468,6 @@
 
 <script>
 document.addEventListener("DOMContentLoaded", () => {
-
-    // =========================================================================
-    // 1. PWA BİLDİRİM VE ROZET İZİNLERİ (Açılışta Çalışır)
-    // =========================================================================
-    (async () => {
-        if ("Notification" in window && Notification.permission === "default") {
-            await Notification.requestPermission();
-        }
-    })();
-
-    if ("clearAppBadge" in navigator) {
-        navigator.clearAppBadge().catch((error) => {
-            console.error("Rozet temizlenirken hata oluştu:", error);
-        });
-    }
-    
-    localStorage.setItem('matyer_badge_cache', 'false');
-
-    // =========================================================================
-    // 2. DOM ELEMENT TANIMLAMALARI (Güvenli Alan)
-    // =========================================================================
     const overlay = document.getElementById("terms-overlay");
     const container = document.getElementById("app-container");
     const scrollBox = document.getElementById("scroll-box");
@@ -511,31 +479,28 @@ document.addEventListener("DOMContentLoaded", () => {
     const studentIdGroup = document.getElementById("studentIdGroup");
     const examLanguageGroup = document.getElementById("examLanguageGroup");
 
-    // =========================================================================
-    // 3. EVENT LISTENERS VE ONAY MEKANİZMASI
-    // =========================================================================
-    if (examSelect) {
-        examSelect.addEventListener("change", () => {
-            const val = examSelect.value;
-            
-            if (val === "mazeret" || val === "butunleme" || val === "mezuniyet") {
-                if (studentIdGroup) studentIdGroup.classList.add("gizli");
-            } else {
-                if (studentIdGroup) studentIdGroup.classList.remove("gizli");
-            }
+    
+    // Sınav türü değişim kontrolü
+    examSelect.addEventListener("change", () => {
+        const val = examSelect.value;
+        
+        // Numara alanını gizle/göster
+        if(val === "mazeret" || val === "butunleme" || val === "mezuniyet") {
+            studentIdGroup.classList.add("gizli");
+        } else {
+            studentIdGroup.classList.remove("gizli");
+        }
 
-            if (val === "butunleme") {
-                if (examLanguageGroup) examLanguageGroup.classList.remove("gizli");
-            } else {
-                if (examLanguageGroup) examLanguageGroup.classList.add("gizli");
-                const langSelect = document.getElementById("examLanguageSelect");
-                if (langSelect) langSelect.value = ""; 
-            }
-        });
-    }
+        // Bütünleme seçildiyse görünür yap, yoksa gizle (Sadece sınıf yönetimi)
+        if(val === "butunleme") {
+            examLanguageGroup.classList.remove("gizli");
+        } else {
+            examLanguageGroup.classList.add("gizli");
+            document.getElementById("examLanguageSelect").value = ""; // Seçimi sıfırla
+        }
+    });
 
     function checkScroll() {
-        if (!scrollBox || !confirmCheckbox || !checkboxContainer) return;
         const scrollIhtiyaciVarMi = scrollBox.scrollHeight > scrollBox.clientHeight;
         const metinBittiMi = scrollBox.scrollHeight - scrollBox.scrollTop <= scrollBox.clientHeight + 10;
         
@@ -546,132 +511,40 @@ document.addEventListener("DOMContentLoaded", () => {
     }
 
     setTimeout(checkScroll, 100);
-    if (scrollBox) scrollBox.addEventListener("scroll", checkScroll);
+    scrollBox.addEventListener("scroll", checkScroll);
 
-    if (confirmCheckbox && approveBtn) {
-        confirmCheckbox.addEventListener("change", () => {
-            approveBtn.disabled = !confirmCheckbox.checked;
-        });
-    }
+    confirmCheckbox.addEventListener("change", () => {
+        approveBtn.disabled = !confirmCheckbox.checked;
+    });
 
-    if (approveBtn && overlay && container) {
-        approveBtn.addEventListener("click", () => {
-            if ('Notification' in window && Notification.permission === 'default') {
-                Notification.requestPermission().then(permission => {
-                    if (permission === 'granted') {
-                        executeBadgeLogic();
-                    }
-                });
-            }
-
-            overlay.style.transition = "opacity 0.3s ease";
-            overlay.style.opacity = "0";
-            
-            setTimeout(() => {
-                overlay.style.display = "none";
-                container.style.display = "block";
-            }, 300);
-        });
-    }
-
-    checkNewCommitsForBadge();
+    approveBtn.addEventListener("click", () => {
+        overlay.style.transition = "opacity 0.3s ease";
+        overlay.style.opacity = "0";
+        
+        setTimeout(() => {
+            overlay.style.display = "none";
+            container.style.display = "block"; 
+        }, 300);
+    });
 });
 
-
-// =============================================================================
-// 4. PWA ICON BADGE KONTROL MEKANİZMASI (Küresel Fonksiyonlar)
-// =============================================================================
-const GITHUB_USER = "ytumat34"; 
-const GITHUB_REPO = "matyer"; 
-
-async function checkNewCommitsForBadge() {
-    if (!('setAppBadge' in navigator)) return;
-    
-    if (typeof registerPeriodicBackupSync === "function") {
-        registerPeriodicBackupSync();
-    }
-
-    if ('Notification' in window && Notification.permission === 'granted') {
-        executeBadgeLogic();
-    } else if (!('Notification' in window)) {
-        executeBadgeLogic();
-    }
-}
-
-function executeBadgeLogic() {
-    const apiUrl = `https://api.github.com/repos/${GITHUB_USER}/${GITHUB_REPO}/commits?per_page=1`;
-
-    fetch(apiUrl)
-        .then(response => response.json())
-        .then(async (data) => {
-            if (data && data.length > 0) {
-                const lastCommitDate = data[0].commit.committer.date;
-                
-                const cache = await caches.open('matyer-badge-cache');
-                const cachedResponse = await cache.match('last_seen_date');
-                const savedDate = cachedResponse ? await cachedResponse.text() : null;
-
-                if (!savedDate || new Date(lastCommitDate) > new Date(savedDate)) {
-                    localStorage.setItem('matyer_badge_cache', 'true'); 
-                    navigator.setAppBadge(1).catch(err => console.log("Badge hatası:", err));
-                } else {
-                    localStorage.setItem('matyer_badge_cache', 'false');
-                    navigator.clearAppBadge().catch(err => console.log("Badge silme hatası:", err));
-                }
-            }
-        })
-        .catch(err => console.error("GitHub API kontrolü başarısız:", err));
-}
-
-async function registerPeriodicBackupSync() {
-    if ('serviceWorker' in navigator) {
-        try {
-            const registration = await navigator.serviceWorker.ready;
-            
-            if ('periodicSync' in registration) {
-                const status = await navigator.permissions.query({
-                    name: 'periodic-background-sync',
-                });
-                
-                if (status.state === 'granted') {
-                    await registration.periodicSync.register('check-csv-update', {
-                        minInterval: 12 * 60 * 60 * 1000, 
-                    });
-                    console.log('Arka plan periyodik kontrolü başarıyla sisteme kaydedildi.');
-                }
-            }
-        } catch (error) {
-            console.error('Periyodik sync kaydı sırasında bir hata oluştu:', error);
-        }
-    }
-}
-
-// =============================================================================
-// 5. ARAMA VE CSV PARSE FONKSİYONU
-// =============================================================================
 function searchExam() {
-    async function internalSaveDateToCache(dateString) {
-        if ('caches' in window) {
-            const cache = await caches.open('matyer-badge-cache');
-            await cache.put('last_seen_date', new Response(dateString));
-        }
-    }
-
     const examSelect = document.getElementById('examTypeSelect');
     const courseSelect = document.getElementById('courseSelect');
     const languageSelect = document.getElementById('examLanguageSelect');
-    const noInput = document.getElementById('studentId');
-    const sonucDiv = document.getElementById('result');
     
-    const examType = examSelect ? examSelect.value : "";
-    const dersKodu = courseSelect ? courseSelect.value : "";
-    const examLanguage = languageSelect ? languageSelect.value : "";
-    const no = noInput ? noInput.value.trim() : "";
+    const examType = examSelect.value;
+    const dersKodu = courseSelect.value;
+    const examLanguage = languageSelect.value;
+    const noInput = document.getElementById('studentId');
+    const no = noInput.value.trim();
+    const sonucDiv = document.getElementById('result');
 
     if (!examType) { alert("Lütfen bir sınav seçin. \n\nPlease select an exam."); return; }
     if (examType === "butunleme" && !examLanguage) { alert("Lütfen bütünleme sınavı için grup dilini seçin. \n\nPlease select the exam group language for the resit exam."); return; }
     if (!dersKodu) { alert("Lütfen bir ders seçin. \n\nPlease select a course."); return; }
     
+    // Genel liste modu kontrolü
     const isGeneralMode = (examType === "mazeret" || examType === "butunleme" || examType === "mezuniyet");
     
     if (!isGeneralMode && !no) { 
@@ -679,18 +552,14 @@ function searchExam() {
         return; 
     }
 
-    // Güvenli select element metni okuma kontrolü
-    let trSinavAdi = "";
-    let enSinavAdi = "";
-    if (examSelect && examSelect.selectedIndex !== -1) {
-        const secilenMetin = examSelect.options[examSelect.selectedIndex].text;
-        trSinavAdi = secilenMetin.split('/')[0].trim();
-        enSinavAdi = secilenMetin.split('/')[1] ? secilenMetin.split('/')[1].trim() : '';
-    }
+    const secilenMetin = examSelect.options[examSelect.selectedIndex].text;
+    const trSinavAdi = secilenMetin.split('/')[0].trim();
+    const enSinavAdi = secilenMetin.split('/')[1] ? secilenMetin.split('/')[1].trim() : '';
 
+    // Dosya adını bütünleme durumuna göre dinamik yapılandırıyoruz
     let dosyaAdi = examType;
     if (examType === "butunleme") {
-        dosYyaAdi = `${examType}_${examLanguage}`;
+        dosyaAdi = `${examType}_${examLanguage}`;
     }
     const dosyaYolu = `${dersKodu}_${dosyaAdi}.csv?v=${new Date().getTime()}`;
 
@@ -705,9 +574,7 @@ function searchExam() {
             const temizListe = liste.map(item => {
                 const yeniObj = {};
                 for (let key in item) {
-                    if (key) {
-                        yeniObj[key.trim().replace(/^\uFEFF/, "")] = item[key];
-                    }
+                    yeniObj[key.trim().replace(/^\uFEFF/, "")] = item[key];
                 }
                 return yeniObj;
             });
@@ -717,18 +584,13 @@ function searchExam() {
             const sinavSaati = genelBilgi.Saat || '-';
             const birlesikDersAdi = `${genelBilgi.Kod || ''} ${genelBilgi.Ders || ''}`.trim();
 
-            if (sonucDiv) sonucDiv.style.display = "block";
+            sonucDiv.style.display = "block";
             
-            localStorage.setItem("matyer_last_seen_date", new Date().toISOString());
-            internalSaveDateToCache(new Date().toISOString());
-
-            if ('clearAppBadge' in navigator) {
-                navigator.clearAppBadge().catch(err => console.log(err));
-            }
-
-            if (isGeneralMode && sonucDiv) {
+            // --- MOD 1: GENEL LİSTE MODU (Mazeret, Bütünleme, Mezuniyet) ---
+            if (isGeneralMode) {
                 sonucDiv.className = "basarili";
 
+                // --- DERS ADINI OTOMATİK İKİ DİLLİ YAPMA SÖZLÜĞÜ ---
                 let trDersAdi = birlesikDersAdi; 
                 let enDersAdi = "";             
 
@@ -751,6 +613,7 @@ function searchExam() {
                     enDersAdi = "MAT1821 Mathematics";
                 }
 
+                // CSV'deki tüm benzersiz Fakülte ve Derslik ikililerini buluyoruz
                 const benzersizSalonlar = [];
                 const kontrolSeti = new Set();
 
@@ -776,6 +639,7 @@ function searchExam() {
                     `;
                 });
 
+                // --- SINAV TÜRÜNE GÖRE DİNAMİK METİN AYARLAMA ---
                 let uyariMetniTR = "";
                 let uyariMetniEN = "";
                 let formLinki = "";
@@ -788,6 +652,7 @@ function searchExam() {
                                         2. Please fill out the form if you will attend, to help us prevent exam booklet waste.`;
                         formLinki = "https://forms.office.com/r/fpesHVAg1L";
                         break;
+                        
                     case "butunleme":
                         uyariMetniTR = `1. İlgili dersten Final harf notu <span style="background:#feebc8; padding:2px 4px; border-radius:4px; font-weight:700;">CC veya üzeri</span> olan öğrenciler bütünleme sınavına <span style="background:#feebc8; padding:2px 4px; border-radius:4px; font-weight:700;">katılamazlar</span>.<br>
                                         2. Basılacak soru kitapçığı sayısını belirlemek ve israfı önlemek adına sınava kesin katılacaksanız lütfen formu doldurunuz.`;
@@ -795,6 +660,7 @@ function searchExam() {
                                         2. To prevent booklet waste and assist with planning, please fill out the form if you will definitely attend.`;
                         formLinki = "https://forms.office.com/r/fpesHVAg1L";
                         break;
+                        
                     case "mezuniyet":
                         uyariMetniTR = `1. Mezuniyet sınavına sadece mezun olabilecek durumda olan öğrenciler katılabilir.<br>
                                         2. Katılım durumunuzu bildirmek ve soru kitapçığı planlamasına yardımcı olmak için lütfen formu doldurunuz.`;
@@ -872,12 +738,13 @@ function searchExam() {
                         </div>
                     </div>
                 `;
-                return; 
+                return; // KRİTİK: Genel mod bittiyse fonksiyon burada durmalı!
             }
 
+            // --- MOD 2: BİREYSEL SORGULAMA MODU (Arasınavlar ve Final) ---
             const student = temizListe.find(o => String(o.No).trim() === no);
             
-            if (student && sonucDiv) {
+            if (student) {
                 sonucDiv.className = "basarili";
                 const tamAd = `${student.Ad || ''} ${student.Soyad || ''}`;
                 const dersGorselAdi = `${student.Kod || ''} ${student.Ders || ''}`.trim();
@@ -919,7 +786,7 @@ function searchExam() {
                         </div>
 
                         <div style="background: #fff5f5; padding: 20px; border-radius: 12px; border: 2px solid #feb2b2;">
-                            <small style="color: #e53e3e; display: block; font-size: 11px; font-weight: 800; margin-bottom: 0px; letter-spacing: 1px;">FAKÜLTE / FACULTY</small>                           
+                            <small style="color: #e53e3e; display: block; font-size: 11px; font-weight: 800; margin-bottom: 0px; letter-spacing: 1px;">FAKÜLTE / FACULTY</small>                            
                             <div style="font-size: 1rem; color: #4a5568; font-weight: 600; margin-bottom: 12px; line-height: 1.2;">${student.Fakulte || '-'}</div> 
                             
                             <small style="color: #e53e3e; display: block; font-size: 11px; font-weight: 800; margin-bottom: -5px; letter-spacing: 1px;">SINAV SALONU / EXAM HALL</small>
@@ -935,7 +802,7 @@ function searchExam() {
                         </div>
                     </div>
                 `;
-            } else if (sonucDiv) {
+            } else {
                 sonucDiv.className = "hata";
                 sonucDiv.innerHTML = `
                     <div style="text-align: center; padding: 10px;">
@@ -967,7 +834,18 @@ function searchExam() {
         }
     });
 }
+
+
 </script>
+
+
+
+
+<script data-goatcounter="https://matyer.goatcounter.com/count"
+        async src="//gc.zgo.at/count.js"></script>
+
+
+
 
 </body>
 </html>
