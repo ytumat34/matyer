@@ -6,23 +6,7 @@
     <!-- Manifest bağlantısı -->
     <link rel="manifest" href="manifest.json">
 
-<script src="https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js" defer></script>
-<script>
-  window.OneSignal = window.OneSignal || [];
-  OneSignal.push(function() {
-    OneSignal.init({
-      appId: "32543356-8547-4d86-8d2f-f352ab34c134",
-      safari_web_id: "optional_safari_id_if_needed", // Boş kalabilir
-      notifyButton: {
-        enable: true, /* Sağ altta küçük bir bildirim zili çıkarır, öğrenciler izin vermek için tıklayabilir */
-      },
-    });
-  });
-</script>
-
-
     <!-- iOS (iPhone) için uygulama ikonu ve ayarları -->
-   
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="apple-mobile-web-app-title" content="MATyer">
     <link class="apple-touch-icon" href="icon.png">
@@ -31,8 +15,8 @@
     <meta name="theme-color" content="#3182ce">
     <title>Sınav Yeri Sorgulama | Exam Location Inquiry</title>
 
-
-<script>
+    <!-- PWA Service Worker Kayıt Kodu -->
+    <script>
       if ('serviceWorker' in navigator) {
         window.addEventListener('load', () => {
           navigator.serviceWorker.register('sw.js')
@@ -410,7 +394,7 @@
 </li>
 
 </ul>
-        </div>
+    </div>
         
         <label id="check-label" class="checkbox-container">
             <input type="checkbox" id="chk-confirm" disabled>
@@ -486,7 +470,7 @@
         </span>
         <br>
         <span style="font-size: 10.5px; color: #718096; font-weight: 500; font-style: italic; margin-top: 5px; display: block; letter-spacing: 0.5px;">
-    YTÜ Matematik Bölümü © 2026
+     YTÜ Matematik Bölümü © 2026
 </span>
     </div>
 
@@ -500,20 +484,17 @@ document.addEventListener("DOMContentLoaded", () => {
     // 1. PWA BİLDİRİM VE ROZET İZİNLERİ (Açılışta Çalışır)
     // =========================================================================
     (async () => {
-        // Tarayıcıdan yerel bildirim göndermek için izin iste
         if ("Notification" in window && Notification.permission === "default") {
             await Notification.requestPermission();
         }
     })();
 
-    // Uygulama açıldığı için ikonun üzerindeki "1" rakamını temizle
     if ("clearAppBadge" in navigator) {
         navigator.clearAppBadge().catch((error) => {
             console.error("Rozet temizlenirken hata oluştu:", error);
         });
     }
     
-    // Cache durumunu sıfırla
     localStorage.setItem('matyer_badge_cache', 'false');
 
     // =========================================================================
@@ -533,8 +514,6 @@ document.addEventListener("DOMContentLoaded", () => {
     // =========================================================================
     // 3. EVENT LISTENERS VE ONAY MEKANİZMASI
     // =========================================================================
-    
-    // Sınav türü değişim kontrolü
     if (examSelect) {
         examSelect.addEventListener("change", () => {
             const val = examSelect.value;
@@ -595,10 +574,8 @@ document.addEventListener("DOMContentLoaded", () => {
         });
     }
 
-    // İlk açılışta commit badge kontrolünü tetikle
     checkNewCommitsForBadge();
-
-}); // DOMContentLoaded burada SAĞLIKLA bitiyor. All listeners are safe now.
+});
 
 
 // =============================================================================
@@ -634,9 +611,8 @@ function executeBadgeLogic() {
                 const cachedResponse = await cache.match('last_seen_date');
                 const savedDate = cachedResponse ? await cachedResponse.text() : null;
 
-                // Yeni commit kontrolü
                 if (!savedDate || new Date(lastCommitDate) > new Date(savedDate)) {
-                    localStorage.setItem('matyer_badge_cache', 'true'); // Cache'i güncelle
+                    localStorage.setItem('matyer_badge_cache', 'true'); 
                     navigator.setAppBadge(1).catch(err => console.log("Badge hatası:", err));
                 } else {
                     localStorage.setItem('matyer_badge_cache', 'false');
@@ -652,16 +628,12 @@ async function registerPeriodicBackupSync() {
         try {
             const registration = await navigator.serviceWorker.ready;
             
-            // Tarayıcının periyodik arka plan senkronizasyon yeteneği var mı?
             if ('periodicSync' in registration) {
-                // Tarayıcı izin durumunu kontrol et
                 const status = await navigator.permissions.query({
                     name: 'periodic-background-sync',
                 });
                 
                 if (status.state === 'granted') {
-                    // Sistemden minimum 12 saatte bir (veya tarayıcının uygun gördüğü en kısa sürede) 
-                    // arka planda uyanma izni talep ediyoruz
                     await registration.periodicSync.register('check-csv-update', {
                         minInterval: 12 * 60 * 60 * 1000, 
                     });
@@ -688,13 +660,13 @@ function searchExam() {
     const examSelect = document.getElementById('examTypeSelect');
     const courseSelect = document.getElementById('courseSelect');
     const languageSelect = document.getElementById('examLanguageSelect');
+    const noInput = document.getElementById('studentId');
+    const sonucDiv = document.getElementById('result');
     
     const examType = examSelect ? examSelect.value : "";
     const dersKodu = courseSelect ? courseSelect.value : "";
     const examLanguage = languageSelect ? languageSelect.value : "";
-    const noInput = document.getElementById('studentId');
     const no = noInput ? noInput.value.trim() : "";
-    const sonucDiv = document.getElementById('result');
 
     if (!examType) { alert("Lütfen bir sınav seçin. \n\nPlease select an exam."); return; }
     if (examType === "butunleme" && !examLanguage) { alert("Lütfen bütünleme sınavı için grup dilini seçin. \n\nPlease select the exam group language for the resit exam."); return; }
@@ -707,13 +679,18 @@ function searchExam() {
         return; 
     }
 
-    const secilenMetin = examSelect.options[examSelect.selectedIndex].text;
-    const trSinavAdi = secilenMetin.split('/')[0].trim();
-    const enSinavAdi = secilenMetin.split('/')[1] ? secilenMetin.split('/')[1].trim() : '';
+    // Güvenli select element metni okuma kontrolü
+    let trSinavAdi = "";
+    let enSinavAdi = "";
+    if (examSelect && examSelect.selectedIndex !== -1) {
+        const secilenMetin = examSelect.options[examSelect.selectedIndex].text;
+        trSinavAdi = secilenMetin.split('/')[0].trim();
+        enSinavAdi = secilenMetin.split('/')[1] ? secilenMetin.split('/')[1].trim() : '';
+    }
 
     let dosyaAdi = examType;
     if (examType === "butunleme") {
-        dosyaAdi = `${examType}_${examLanguage}`;
+        dosYyaAdi = `${examType}_${examLanguage}`;
     }
     const dosyaYolu = `${dersKodu}_${dosyaAdi}.csv?v=${new Date().getTime()}`;
 
@@ -728,7 +705,9 @@ function searchExam() {
             const temizListe = liste.map(item => {
                 const yeniObj = {};
                 for (let key in item) {
-                    yeniObj[key.trim().replace(/^\uFEFF/, "")] = item[key];
+                    if (key) {
+                        yeniObj[key.trim().replace(/^\uFEFF/, "")] = item[key];
+                    }
                 }
                 return yeniObj;
             });
@@ -740,14 +719,12 @@ function searchExam() {
 
             if (sonucDiv) sonucDiv.style.display = "block";
             
-            // --- ROZETİ TEMİZLEME MEKANİZMASI ---
             localStorage.setItem("matyer_last_seen_date", new Date().toISOString());
             internalSaveDateToCache(new Date().toISOString());
 
             if ('clearAppBadge' in navigator) {
                 navigator.clearAppBadge().catch(err => console.log(err));
             }
-            // ----------------------------------------------------
 
             if (isGeneralMode && sonucDiv) {
                 sonucDiv.className = "basarili";
@@ -942,7 +919,7 @@ function searchExam() {
                         </div>
 
                         <div style="background: #fff5f5; padding: 20px; border-radius: 12px; border: 2px solid #feb2b2;">
-                            <small style="color: #e53e3e; display: block; font-size: 11px; font-weight: 800; margin-bottom: 0px; letter-spacing: 1px;">FAKÜLTE / FACULTY</small>                            
+                            <small style="color: #e53e3e; display: block; font-size: 11px; font-weight: 800; margin-bottom: 0px; letter-spacing: 1px;">FAKÜLTE / FACULTY</small>                           
                             <div style="font-size: 1rem; color: #4a5568; font-weight: 600; margin-bottom: 12px; line-height: 1.2;">${student.Fakulte || '-'}</div> 
                             
                             <small style="color: #e53e3e; display: block; font-size: 11px; font-weight: 800; margin-bottom: -5px; letter-spacing: 1px;">SINAV SALONU / EXAM HALL</small>
@@ -990,10 +967,7 @@ function searchExam() {
         }
     });
 }
-
-
 </script>
-
 
 </body>
 </html>
