@@ -1,4 +1,4 @@
-const CACHE_NAME = 'matyer-v2.3'; // Çakışmayı tamamen bitirmek için 2.2 yapalım hocam
+const CACHE_NAME = 'matyer-v2.4'; 
 const ASSETS_TO_CACHE = [
   './',
   './index.html',
