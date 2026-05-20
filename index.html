@@ -6,7 +6,19 @@
     <!-- Manifest bağlantısı -->
     <link rel="manifest" href="manifest.json">
 
-
+<script src="https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js" defer></script>
+<script>
+  window.OneSignal = window.OneSignal || [];
+  OneSignal.push(function() {
+    OneSignal.init({
+      appId: "32543356-8547-4d86-8d2f-f352ab34c134",
+      safari_web_id: "optional_safari_id_if_needed", // Boş kalabilir
+      notifyButton: {
+        enable: true, /* Sağ altta küçük bir bildirim zili çıkarır, öğrenciler izin vermek için tıklayabilir */
+      },
+    });
+  });
+</script>
 
 
     <!-- iOS (iPhone) için uygulama ikonu ve ayarları -->

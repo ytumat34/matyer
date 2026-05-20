@@ -1,3 +1,5 @@
+importScripts('https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.sw.js');
+
 const CACHE_NAME = 'matyer-v2.4'; 
 const ASSETS_TO_CACHE = [
   './',
