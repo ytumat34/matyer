@@ -485,27 +485,29 @@
 
 document.addEventListener("DOMContentLoaded", () => {
 
-    // --- BURADAN İTİBAREN AŞAĞIDAKİ BLOKU AYNEN YAPIŞTIR ---
-    
-    // Kendi içinde async çalışan güvenli bir blok oluşturduk
+    // =========================================================================
+    // 1. PWA BİLDİRİM VE ROZET İZİNLERİ (Açılışta Çalışır)
+    // =========================================================================
     (async () => {
-        // 1. Tarayıcıdan yerel bildirim göndermek için izin iste
+        // Tarayıcıdan yerel bildirim göndermek için izin iste
         if ("Notification" in window && Notification.permission === "default") {
             await Notification.requestPermission();
         }
     })();
 
-    // 2. Uygulama açıldığı için ikonun üzerindeki "1" rakamını temizle (await gerektirmez)
+    // Uygulama açıldığı için ikonun üzerindeki "1" rakamını temizle
     if ("clearAppBadge" in navigator) {
         navigator.clearAppBadge().catch((error) => {
             console.error("Rozet temizlenirken hata oluştu:", error);
         });
     }
     
-    // Senin mevcut mantığına uyum için cache durumunu sıfırla
+    // Cache durumunu sıfırla
     localStorage.setItem('matyer_badge_cache', 'false');
-});
 
+    // =========================================================================
+    // 2. DOM ELEMENT TANIMLAMALARI (Artık DOMContentLoaded İçinde - Güvenli)
+    // =========================================================================
     const overlay = document.getElementById("terms-overlay");
     const container = document.getElementById("app-container");
     const scrollBox = document.getElementById("scroll-box");
@@ -517,56 +519,58 @@ document.addEventListener("DOMContentLoaded", () => {
     const studentIdGroup = document.getElementById("studentIdGroup");
     const examLanguageGroup = document.getElementById("examLanguageGroup");
 
-    // --- PWA ICON BADGE KONTROL MEKANİZMASI ---
-    const GITHUB_USER = "ytumat34"; 
-    const GITHUB_REPO = "....";
+    // NOT: Onay butonuna basma, checkbox kontrolü ve init() gibi senin 
+    // kendi orijinal kodların da tam BURADA (DOMContentLoaded içinde) yer almalı hocam.
 
-    async function checkNewCommitsForBadge() {
-        if (!('setAppBadge' in navigator)) return;
+}); // DOMContentLoaded burada güvenle bitiyor.
+
+
+// =============================================================================
+// 3. PWA ICON BADGE KONTROL MEKANİZMASI (Fonksiyonlar Dışarıda Kalabilir)
+// =============================================================================
+const GITHUB_USER = "ytumat34"; 
+const GITHUB_REPO = "matyer"; // "...." olan yeri repo adınla güncelledim hocam
+
+async function checkNewCommitsForBadge() {
+    if (!('setAppBadge' in navigator)) return;
+    
+    // Eğer bu fonksiyonun yoksa konsolda hata vermemesi için kontrol ekleyebilirsin
+    if (typeof registerPeriodicBackupSync === "function") {
         registerPeriodicBackupSync();
+    }
 
-        if ('Notification' in window && Notification.permission === 'granted') {
-            executeBadgeLogic();
-        } else if (!('Notification' in window)) {
-            executeBadgeLogic();
-        }
-    
-
-if (isNew) {
-    localStorage.setItem('matyer_badge_cache', 'true');
-    
-    // Eğer uygulama o an açıksa anında ikonun üzerine 1 yazdırır
-    if ("setAppBadge" in navigator) {
-        navigator.setAppBadge(1).catch((error) => {
-            console.error("Rozet ayarlanırken hata oluştu:", error);
-        });
+    if ('Notification' in window && Notification.permission === 'granted') {
+        executeBadgeLogic();
+    } else if (!('Notification' in window)) {
+        executeBadgeLogic();
     }
 }
-}
 
+function executeBadgeLogic() {
+    const apiUrl = `https://api.github.com/repos/${GITHUB_USER}/${GITHUB_REPO}/commits?per_page=1`;
 
-    function executeBadgeLogic() {
-        const apiUrl = `https://api.github.com/repos/${GITHUB_USER}/${GITHUB_REPO}/commits?per_page=1`;
+    fetch(apiUrl)
+        .then(response => response.json())
+        .then(async (data) => {
+            if (data && data.length > 0) {
+                const lastCommitDate = data[0].commit.committer.date;
+                
+                const cache = await caches.open('matyer-badge-cache');
+                const cachedResponse = await cache.match('last_seen_date');
+                const savedDate = cachedResponse ? await cachedResponse.text() : null;
 
-        fetch(apiUrl)
-            .then(response => response.json())
-            .then(async (data) => {
-                if (data && data.length > 0) {
-                    const lastCommitDate = data[0].commit.committer.date;
-                    
-                    const cache = await caches.open('matyer-badge-cache');
-                    const cachedResponse = await cache.match('last_seen_date');
-                    const savedDate = cachedResponse ? await cachedResponse.text() : null;
-
-                    if (!savedDate || new Date(lastCommitDate) > new Date(savedDate)) {
-                        navigator.setAppBadge(1).catch(err => console.log("Badge hatası:", err));
-                    } else {
-                        navigator.clearAppBadge().catch(err => console.log("Badge silme hatası:", err));
-                    }
+                // Yeni commit kontrolü
+                if (!savedDate || new Date(lastCommitDate) > new Date(savedDate)) {
+                    localStorage.setItem('matyer_badge_cache', 'true'); // Cache'i güncelle
+                    navigator.setAppBadge(1).catch(err => console.log("Badge hatası:", err));
+                } else {
+                    localStorage.setItem('matyer_badge_cache', 'false');
+                    navigator.clearAppBadge().catch(err => console.log("Badge silme hatası:", err));
                 }
-            })
-            .catch(err => console.error("GitHub API kontrolü başarısız:", err));
-    }
+            }
+        })
+        .catch(err => console.error("GitHub API kontrolü başarısız:", err));
+}
 
     async function registerPeriodicBackupSync() {
         if ('serviceWorker' in navigator) {
